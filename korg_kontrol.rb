@@ -50,14 +50,14 @@ module KorgKontrol
       	:enter => 0x14,
       	:tempo => 0x16,
       	:next => 0x18,
-      	:previous => 0x19
+      	:previous => 0x19,
+      	:sw1 => 0x20,
+      	:sw2 => 0x21
       }.merge((1..16).inject({}){ |h, p| h["pad_#{p}".to_sym] = h[p] = p - 1; h })
       
     end
     
     def method_missing(method, *args)
-      #constant = Object.module_eval(method.to_s.upcase)
-      #send_sysex constant
       puts "Methmiss: #{method.class} #{args.inspect}"
     end
     
@@ -169,7 +169,7 @@ module KorgKontrol
   
   class GroupManager
     attr_accessor :kontrol, :groups
-    attr_reader :current
+    attr_reader :current, :last
     
     def initialize
       @groups = []
@@ -177,6 +177,7 @@ module KorgKontrol
     end
     
     def add_group(group)
+      raise "Already managing a group with the selector '#{group.selector}'" if @groups.find{ |g| g.selector == group.selector }
       group.kontrol = @kontrol
       group.manager = self
       @groups << group
@@ -192,7 +193,12 @@ module KorgKontrol
     def capture_event(event)
       if event.is_a?(ButtonEvent)
         if selected_group = @groups.find { |g| g.selector == event.selector }
-          self.current = selected_group if event.state and selected_group != @current
+          if event.state
+            self.current = selected_group if selected_group != @current
+          elsif @current.hold and @last 
+            puts "unlatch"
+            self.current = @last
+          end
           true
         else
           @current.capture_event(event)
@@ -201,7 +207,11 @@ module KorgKontrol
     end
     
     def current=(group)
-      @kontrol.led @current.selector, :off if @current
+      puts "New group: #{group.selector}"
+      if @current
+        @last = @current
+        @kontrol.led @current.selector, :off
+      end
       group.activate
       @current = group
     end
@@ -209,14 +219,16 @@ module KorgKontrol
   end
   
   class Group
-    attr_accessor :kontrol, :manager, :selector, :members
+    attr_accessor :kontrol, :manager, :selector, :members, :hold
     def initialize(selector, members, options = {})
       @selector = selector
       
       @members = Kontroller.flatten(members)
       @clears = @members.inject({}) { |memo, member| memo[member] = :off; memo }
       
-      @values = @clears.merge(options.delete(:initial_values) || {})
+      # Set options
+      @hold = options[:hold]
+      @values = @clears.merge(options[:initial_values] || {})
     end
     
     def activate

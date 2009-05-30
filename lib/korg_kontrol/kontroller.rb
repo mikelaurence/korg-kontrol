@@ -89,7 +89,7 @@ module KorgKontrol
     end
     
     def lcd(index, text, color = :red)
-      send_sysex [0x22, 0x09] + [((LCD_COLORS[color] || 0) | index)] + (0..7).collect{ |c| text[c] || 32 }
+      send_sysex [0x22, 0x09] + [((LCD_COLORS[color] || 0) | index - 1)] + (0..7).collect{ |c| text.to_s[c] || 32 }
     end
         
     def send_sysex(data)

@@ -26,18 +26,15 @@ module KorgKontrol
     end
     
     def capture_event(event)
-      if event.is_a?(ButtonEvent)
-        if selected_group = @groups.find { |g| g.selector == event.selector }
-          if event.state
-            self.current = selected_group if selected_group != @current
-          elsif @current.hold and @last 
-            self.current = @last
-          end
-          true
-        else
-          @current.capture_event(event)
+      if event.is_a?(ButtonEvent) and selected_group = @groups.find { |g| g.selector == event.selector }
+        if event.state
+          self.current = selected_group if selected_group != @current
+        elsif @current.hold and @last 
+          self.current = @last
         end
+        return true
       end
+      @current.capture_event(event)
     end
     
     def current=(group)
@@ -80,7 +77,7 @@ module KorgKontrol
     end
     
     def capture_event(event)
-      @controls[event.class].find{ |c| c.capture_event(event) }
+      @controls[event.class].find{ |c| c.capture_event(event) } if @controls[event.class]
     end
   end
   
@@ -92,11 +89,21 @@ module KorgKontrol
     end
   end
   
+  # Base class for indexable controls, including pads, encoders, and sliders
+  # A single index or any enumberable can be supplied. For example, to encompass all sliders
+  # with one control, you could use a range (1..16); you could also use an array to target
+  # specific indexes (e.g., [1, 5, 9, 13] for all pads in the leftmost column)
   class IndexedControl < GroupControl
     attr_accessor :indexes, :values
     
+    def initialize(indexes, options = {})
+      @indexes = indexes.respond_to?(:to_a) ? indexes.to_a : [*indexes]
+      @options = options
+      @values = options.delete(:defaults) || {}
+    end
+    
     def capture_event(event)
-      if @indexes == event.index or (@indexes.respond_to?(:include?) and @indexes.include?(event.index))
+      if @indexes.include?(event.index)
         process_event event
         display_item event.index
         true
@@ -104,23 +111,13 @@ module KorgKontrol
     end
     
     def display
-      if @indexes.respond_to?(:each)
-        @indexes.each { |i| display_item i }
-      else
-        display_item @indexes
-      end
+      @indexes.each { |i| display_item i }
     end
     
   end
   
   class PadControl < IndexedControl
     EVENT_TYPE = PadEvent
-    
-    def initialize(indexes, options = {})
-      @indexes = indexes
-      @options = options
-      @values = options.delete(:defaults) || {}
-    end
 
     def display_item(index)
       kontrol.led index, :oneshot
@@ -137,5 +134,25 @@ module KorgKontrol
     def display_item(index)
       kontrol.led index, @values[index] ? :on : :off, @options[:color]
     end
+  end
+  
+  class EncoderControl < IndexedControl
+    EVENT_TYPE = EncoderEvent
+    
+    def initialize(indexes, options = {})
+      super
+      @min = options[:min] || 0
+      @max = options[:max] || 127
+      @indexes.each { |i| @values[i] ||= (options[:default] || 0) }
+    end
+    
+    def process_event(event)
+      val = @values[event.index] + event.direction
+      @values[event.index] = val unless val < @min or val > @max
+    end
+    
+    def display_item(index)
+      kontrol.lcd index, @values[index], @options[:color]
+    end    
   end
 end

@@ -43,6 +43,7 @@ module KorgKontrol
   class EncoderEvent < KontrolEvent
     attr_reader :index, :direction
     def initialize(data)
+      puts data.inspect
       @index = data[0] + 1
       @direction = data[1] == 1 ? 1 : -1
     end

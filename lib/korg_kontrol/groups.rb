@@ -59,11 +59,9 @@ module KorgKontrol
       # Setup controls
       @controls = {}
       options[:controls].each { |c| add_control c } if options[:controls]
-      #@clears = @members.inject({}) { |memo, member| memo[member] = :off; memo }
       
       # Setup options
       @hold = options[:hold]
-      #@values = @clears.merge(options[:initial_values] || {})
     end
     
     def add_control(control)
@@ -73,8 +71,12 @@ module KorgKontrol
     end
     
     def activate
-      @kontrol.set_state @values
       @kontrol.led @selector, :on, :red
+      
+      # Reset display for this group's controls
+      @controls.each_value do |ctrls|
+        ctrls.each { |c| c.display }
+      end
     end
     
     def capture_event(event)
@@ -90,29 +92,37 @@ module KorgKontrol
     end
   end
   
-  class PadControl < GroupControl
+  class IndexedControl < GroupControl
+    attr_accessor :indexes, :values
+    
+    def capture_event(event)
+      if @indexes == event.index or (@indexes.respond_to?(:include?) and @indexes.include?(event.index))
+        process_event event
+        display_item event.index
+        true
+      end
+    end
+    
+    def display
+      if @indexes.respond_to?(:each)
+        @indexes.each { |i| display_item i }
+      else
+        display_item @indexes
+      end
+    end
+    
+  end
+  
+  class PadControl < IndexedControl
     EVENT_TYPE = PadEvent
-    attr_accessor :indexes
     
     def initialize(indexes, options = {})
       @indexes = indexes
       @options = options
-      @values = {}
+      @values = options.delete(:defaults) || {}
     end
-    
-    def capture_event(event)
-      if @indexes == event.index or (@indexes.respond_to?(:include?) and @indexes.include?(event.index))
-        p = process_event(event)
-        display event.index
-        p
-      end
-    end
-    
-    def process_event(event)
-      true
-    end
-    
-    def display(index)
+
+    def display_item(index)
       kontrol.led index, :oneshot
     end
   end
@@ -124,7 +134,7 @@ module KorgKontrol
       end
     end
     
-    def display(index)
+    def display_item(index)
       kontrol.led index, @values[index] ? :on : :off, @options[:color]
     end
   end

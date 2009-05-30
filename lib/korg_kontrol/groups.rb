@@ -67,6 +67,7 @@ module KorgKontrol
     end
     
     def add_control(control)
+      control.group = self
       @controls[control.class::EVENT_TYPE] ||= []
       @controls[control.class::EVENT_TYPE] << control
     end
@@ -77,29 +78,54 @@ module KorgKontrol
     end
     
     def capture_event(event)
-      @controls[event.class]
+      @controls[event.class].find{ |c| c.capture_event(event) }
     end
   end
   
-  class PadControl
+  class GroupControl
+    attr_accessor :group
+    
+    def kontrol
+      @group.kontrol
+    end
+  end
+  
+  class PadControl < GroupControl
     EVENT_TYPE = PadEvent
     attr_accessor :indexes
+    
     def initialize(indexes, options = {})
       @indexes = indexes
-      @capture = options[:capture] || lambda{ |e| false }
+      @options = options
+      @values = {}
     end
     
-    def capture(event)
-      @capture.call(event) if @indexes == event.index or (@indexes.respond_to?(:include?) and @indexes.include?(event.index))
-    end
-    
-    # Built-in types
-    def self.toggle(indexes, options = {})
-      new indexes, :capture => lambda do |e|
-        
-        
+    def capture_event(event)
+      if @indexes == event.index or (@indexes.respond_to?(:include?) and @indexes.include?(event.index))
+        p = process_event(event)
+        display event.index
+        p
       end
     end
     
+    def process_event(event)
+      true
+    end
+    
+    def display(index)
+      kontrol.led index, :oneshot
+    end
+  end
+  
+  class PadControlToggle < PadControl
+    def process_event(event)
+      if event.state
+        @values[event.index] = !@values[event.index]
+      end
+    end
+    
+    def display(index)
+      kontrol.led index, @values[index] ? :on : :off, @options[:color]
+    end
   end
 end

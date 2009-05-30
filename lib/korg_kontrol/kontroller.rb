@@ -11,6 +11,7 @@
 #
 # Let me know if you stumble across this and you're desperate for it to work immediately! In that case, I'll put a little extra effort in :-)
 
+
 module KorgKontrol
   
   HEADER = [0xf0, 0x42, 0x40, 0x6e]
@@ -134,7 +135,7 @@ module KorgKontrol
         if pad_id = @pad_ids[key]
           led key, value == :off ? :off : :on, value
         end
-      end
+      end if states
     end
     
     def add_manager(manager)
@@ -163,167 +164,5 @@ module KorgKontrol
       super midi_out, midi_in, HEADER + MICRO_KONTROL_HEADER
     end
   end
-  
-  
-  # Control Modules
-  
-  class GroupManager
-    attr_accessor :kontrol, :groups
-    attr_reader :current, :last
-    
-    def initialize
-      @groups = []
-      @selectors = []
-    end
-    
-    def add_group(group)
-      raise "Already managing a group with the selector '#{group.selector}'" if @groups.find{ |g| g.selector == group.selector }
-      group.kontrol = @kontrol
-      group.manager = self
-      @groups << group
-      group
-    end
-    
-    def activate
-      @groups.each do |g|
-        g.activate
-      end
-    end
-    
-    def capture_event(event)
-      if event.is_a?(ButtonEvent)
-        if selected_group = @groups.find { |g| g.selector == event.selector }
-          if event.state
-            self.current = selected_group if selected_group != @current
-          elsif @current.hold and @last 
-            puts "unlatch"
-            self.current = @last
-          end
-          true
-        else
-          @current.capture_event(event)
-        end
-      end
-    end
-    
-    def current=(group)
-      puts "New group: #{group.selector}"
-      if @current
-        @last = @current
-        @kontrol.led @current.selector, :off
-      end
-      group.activate
-      @current = group
-    end
-    
-  end
-  
-  class Group
-    attr_accessor :kontrol, :manager, :selector, :members, :hold
-    def initialize(selector, members, options = {})
-      @selector = selector
-      
-      @members = Kontroller.flatten(members)
-      @clears = @members.inject({}) { |memo, member| memo[member] = :off; memo }
-      
-      # Set options
-      @hold = options[:hold]
-      @values = @clears.merge(options[:initial_values] || {})
-    end
-    
-    def activate
-      @kontrol.set_state @values
-      @kontrol.led @selector, :on, :green
-    end
-    
-    def capture_event(event)
-      if @members.include?(event.selector)
-        true
-      end
-    end
-  end
-  
-  
-  # MIDI input events
-  
-  class KontrolEvent
-    attr_reader :data
-    def initialize(data)
-      @data = data
-    end
-  end
-  
-  class NativeModeEvent < KontrolEvent
-  end
-  
-  class ButtonEvent < KontrolEvent
-    attr_reader :state
-  end
-
-  class PadEvent < ButtonEvent
-    attr_reader :index, :velocity
-    def initialize(data)
-      @index = (data[0] & 15) + 1
-      @state = data[0] > 15
-      @velocity = data[1]
-    end
-    
-    def selector
-      @index
-    end
-  end
-  
-  class SwitchEvent < ButtonEvent
-    attr_reader :type
-    def initialize(data)
-      @type = SWITCH_INPUT_VALUES[data[0]]
-      @state = data[1] == 127
-    end
-    
-    def selector
-      @type
-    end
-  end
-  
-  class EncoderEvent < KontrolEvent
-    attr_reader :index, :direction
-    def initialize(data)
-      @index = data[0] + 1
-      @direction = data[1] == 1 ? 1 : -1
-    end
-  end
-  
-  class SliderEvent < KontrolEvent
-    attr_reader :index, :value
-    def initialize(data)
-      @index = data[0] + 1
-      @value = data[1]
-    end
-  end
-
-  class WheelEvent < KontrolEvent
-    attr_reader :type, :value
-    def initialize(data)
-      @type = data[0] == 0 ? :pitch_bend : :mod_wheel
-      @value = data[1]
-    end
-  end
-  
-  class PedalEvent < KontrolEvent
-    attr_reader :type, :value
-    def initialize(data)
-      @type = data[0] == 0 ? :assignable_sw : :assignable_pedal
-      @value = data[1]
-    end
-  end
-  
-  class JoystickEvent < KontrolEvent
-    attr_reader :x, :y
-    def initialize(data)
-      @x = data[0]
-      @y = data[1]
-    end
-  end
-  
   
 end

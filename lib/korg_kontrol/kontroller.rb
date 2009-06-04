@@ -14,7 +14,7 @@
 
 module KorgKontrol
   
-  HEADER = [0xf0, 0x42, 0x40, 0x6e]
+  HEADER = [0x42, 0x40, 0x6e]
   KONTROL_49_HEADER = [0x02]
   MICRO_KONTROL_HEADER = [0]
   
@@ -94,7 +94,7 @@ module KorgKontrol
         
     def send_sysex(data)
       #puts "Kontrol out: #{data.join(' ')}"
-      @midi_out.sysex @sysex_header + data + [0xf7]
+      @midi_out.sysex @sysex_header + data
     end
     
     def capture_midi

@@ -5,7 +5,8 @@ module KorgKontrol
   class GroupManager
     attr_accessor :kontrol, :groups, :current
     
-    def initialize
+    def initialize(options = {})
+      @midi_out = options[:midi_out]
       @groups = []
       @selectors = []
       
@@ -85,7 +86,12 @@ module KorgKontrol
   end
   
   class GroupControl
-    attr_accessor :group
+    attr_accessor :group, :action
+    
+    def initialize(indexes, options = {})
+      @options = options
+      @midi_out = options[:midi_out]
+    end
     
     def kontrol
       @group.kontrol
@@ -93,6 +99,23 @@ module KorgKontrol
     
     def manager
       @group.manager
+    end
+    
+    def execute_action(params)
+      if @action.is_a?(Proc)
+        @action.call *params
+      else
+        @action
+      end
+    end
+
+    def process_result(result)
+      case result
+      when Enumerable
+        result.each { |e| process_result e }
+      when MidiMix::MidiMessage
+        @options[:midi_out] || manager.midi_out << result
+      end
     end
   end
   
@@ -104,8 +127,8 @@ module KorgKontrol
     attr_accessor :indexes, :current_values
     
     def initialize(indexes, options = {})
+      super
       @indexes = indexes.respond_to?(:to_a) ? indexes.to_a : [*indexes]
-      @options = options
       
       # Set default values. Expand default to multiple indexes if key is an enumerable.
       @current_values = (options.delete(:defaults) || {}).inject({}) do |hash, default| 
@@ -120,7 +143,8 @@ module KorgKontrol
     
     def capture_event(event)
       if @indexes.include?(event.index)
-        process_event(event)
+        process_event event
+        process_result execute_action(action_parameters(event)) if @action
         display_item event.index
         true
       end
@@ -157,6 +181,10 @@ module KorgKontrol
     
     def display_item(index)
       kontrol.led index, @current_values[index] ? :on : :off, @options[:color]
+    end
+    
+    def action_parameters(event)
+      [event.index, @current_values[event.index]]
     end
   end
   

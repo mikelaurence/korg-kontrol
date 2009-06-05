@@ -101,14 +101,14 @@ module KorgKontrol
   ### with one control, you could use a range (1..16); you could also use an array to target
   ### specific indexes (e.g., [1, 5, 9, 13] for all pads in the leftmost column)
   class IndexedControl < GroupControl
-    attr_accessor :indexes, :values
+    attr_accessor :indexes, :current_values
     
     def initialize(indexes, options = {})
       @indexes = indexes.respond_to?(:to_a) ? indexes.to_a : [*indexes]
       @options = options
       
       # Set default values. Expand default to multiple indexes if key is an enumerable.
-      @values = (options.delete(:defaults) || {}).inject({}) do |hash, default| 
+      @current_values = (options.delete(:defaults) || {}).inject({}) do |hash, default| 
         if default[0].respond_to?(:each)
           default[0].each{ |v| hash[v] = default[1] }
         else
@@ -120,9 +120,8 @@ module KorgKontrol
     
     def capture_event(event)
       if @indexes.include?(event.index)
-        if process_event(event)
-          display_item event.index
-        end
+        process_event(event)
+        display_item event.index
         true
       end
     end
@@ -151,13 +150,13 @@ module KorgKontrol
   class PadControlToggle < PadControl
     def process_event(event)
       if event.state
-        @values[event.index] = !@values[event.index]
+        @current_values[event.index] = !@current_values[event.index]
         true
       end
     end
     
     def display_item(index)
-      kontrol.led index, @values[index] ? :on : :off, @options[:color]
+      kontrol.led index, @current_values[index] ? :on : :off, @options[:color]
     end
   end
   
@@ -174,7 +173,7 @@ module KorgKontrol
     end
     
     def display_item(index)
-      kontrol.lcd index, @values[index], @options[:color]
+      kontrol.lcd index, @current_values[index], @options[:color]
     end
     
     def revert_in(index, time)
@@ -195,30 +194,37 @@ module KorgKontrol
   end
   
   class IndexedLabeledControl < IndexedControl
+    attr_accessor :values
+    
     def initialize(indexes, options = {})
       super
       
-      @min = options[:min] || 0
-      @max = options[:max] || 127
-      @indexes.each { |i| @values[i] ||= (options[:default] || 0) }
+      @values = options[:values] || (0..127)
+      raise "[IndexedLabeledControl] Values must be a range or an array" unless @values.is_a?(Range) or @values.is_a?(Array)
+      if @values.is_a?(Array)
+        extend IndexedEnumerableControl
+        extend key == EncoderEvent ? EncoderEnumerable : SliderEnumerable
+      end
+
+      init_defaults
+    end
+
+    def init_defaults
+      @indexes.each { |i| @current_values[i] = @options[:default] || 0 }
     end
     
     def display_item(index)
-      kontrol.lcd index, @label, @options[:color]
-    end
-    
-    def display_item_value(index)
-      kontrol.lcd index, @values[index], @options[:color]
-      manager.lcd_revert index, @options[:lcd_revert_time] || 1
+      if @options[:display] != false
+        kontrol.lcd index, @current_values[index], @options[:color]
+        manager.lcd_revert index, @options[:lcd_revert_time] || 1 unless @options[:revert_lcd] = false
+      end
     end
   end
 
   class EncoderControl < IndexedLabeledControl    
     def process_event(event)
-      val = @values[event.index] + event.direction
-      @values[event.index] = val unless val < @min or val > @max
-      display_item_value event.index
-      false
+      idx = @current_values[event.index] + event.direction * (@options[:speed] || 1)
+      @current_values[event.index] = idx unless idx < @values.min or idx > @values.max
     end
     
     def key
@@ -228,14 +234,46 @@ module KorgKontrol
   
   class SliderControl < IndexedLabeledControl
     def process_event(event)
-      @values[event.index] = @min + (event.value / 127.0 * (@max - @min))
-      @values[event.index] = @values[event.index].to_i if @options[:format] == :integer
-      display_item_value event.index
-      false
+      @current_values[event.index] = @values.min + (event.value / 127.0 * (@values.max - @values.min))
+      @current_values[event.index] = @current_values[event.index].to_i if @options[:format] == :integer
     end
     
     def key
       SliderEvent
+    end
+  end
+  
+  module IndexedEnumerableControl
+    def init_defaults
+      @current_value_indexes = {}
+      @indexes.each do |i|
+        i = @current_value_indexes[i] = @values.index(@options[:default]) || 0
+        @current_values[i] = @values[i]
+      end      
+    end
+    
+    def process_values(control_index, value_index)
+      @current_value_indexes[control_index] = value_index
+      @current_values[control_index] = @values[value_index]
+    end
+  end
+  
+  module EncoderEnumerable
+    def process_event(event)
+      idx = @current_value_indexes[event.index] + event.direction;
+      if (idx >= @values.size)
+        idx = @options[:cycle] ? 0 : @values.size - 1
+      elsif (idx < 0)
+        idx = @options[:cycle] ? @values.size - 1 : 0
+      end
+      
+      process_values event.index, idx
+    end
+  end
+  
+  module SliderEnumerable
+    def process_event(event)
+      process_values event.index, (event.value / 128 * @values.size).floor
     end
   end
 end

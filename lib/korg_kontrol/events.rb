@@ -6,67 +6,72 @@ module KorgKontrol
     def initialize(data)
       @data = data
     end
+    
+    def selector
+      :default
+    end
   end
 
   class NativeModeEvent < KontrolEvent
   end
-
-  class ButtonEvent < KontrolEvent
-    attr_reader :state
-  end
-
-  class PadEvent < ButtonEvent
-    attr_reader :index, :velocity
-    def initialize(data)
-      @index = (data[0] & 15) + 1
-      @state = data[0] > 15
-      @velocity = data[1]
-    end
   
+  class IndexedEvent < KontrolEvent
+    attr_reader :index
     def selector
       @index
     end
   end
-
-  class SwitchEvent < ButtonEvent
-    attr_reader :type
-    def initialize(data)
-      @type = SWITCH_INPUT_VALUES[data[0]]
-      @state = data[1] == 127
-    end
   
+  class TypedEvent < KontrolEvent
+    attr_reader :type
     def selector
       @type
     end
   end
 
-  class EncoderEvent < KontrolEvent
-    attr_reader :index, :direction
+  class PadEvent < IndexedEvent
+    attr_accessor :state, :velocity
     def initialize(data)
-      puts data.inspect
+      @index = (data[0] & 15) + 1
+      @state = data[0] > 15
+      @velocity = data[1]
+    end
+  end
+
+  class SwitchEvent < TypedEvent
+    attr_reader :state, :type
+    def initialize(data)
+      @type = SWITCH_INPUT_VALUES[data[0]]
+      @state = data[1] == 127
+    end
+  end
+
+  class EncoderEvent < IndexedEvent
+    attr_reader :direction
+    def initialize(data)
       @index = data[0] + 1
       @direction = data[1] == 1 ? 1 : -1
     end
   end
 
-  class SliderEvent < KontrolEvent
-    attr_reader :index, :value
+  class SliderEvent < IndexedEvent
+    attr_reader :value
     def initialize(data)
       @index = data[0] + 1
       @value = data[1]
     end
   end
 
-  class WheelEvent < KontrolEvent
-    attr_reader :type, :value
+  class WheelEvent < TypedEvent
+    attr_reader :value
     def initialize(data)
       @type = data[0] == 0 ? :pitch_bend : :mod_wheel
       @value = data[1]
     end
   end
 
-  class PedalEvent < KontrolEvent
-    attr_reader :type, :value
+  class PedalEvent < TypedEvent
+    attr_reader :value
     def initialize(data)
       @type = data[0] == 0 ? :assignable_sw : :assignable_pedal
       @value = data[1]

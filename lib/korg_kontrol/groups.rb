@@ -3,53 +3,45 @@
 module KorgKontrol
   
   class GroupManager
-    attr_accessor :kontrol, :groups
-    attr_reader :current, :last
+    attr_accessor :kontrol, :groups, :current
     
     def initialize
       @groups = []
       @selectors = []
+      
+      # Setup hash for active controls
+      @current = [PadEvent, SwitchEvent, EncoderEvent, SliderEvent, WheelEvent, PedalEvent, JoystickEvent].inject({}) do |hash, event|
+        hash[event] = {}
+      end
     end
     
     def add_group(group)
-      raise "Already managing a group with the selector '#{group.selector}'" if @groups.find{ |g| g.selector == group.selector }
+      #raise "Already managing a group with the selector '#{group.selector}'" if @groups.find{ |g| g.selector == group.selector }
       group.kontrol = @kontrol
       group.manager = self
       @groups << group
       group
     end
     
-    def activate
-      @groups.each do |g|
-        g.activate
-      end
-    end
-    
     def capture_event(event)
-      if event.is_a?(ButtonEvent) and selected_group = @groups.find { |g| g.selector == event.selector }
-        if event.state
-          self.current = selected_group if selected_group != @current
-        elsif @current.hold and @last 
-          self.current = @last
-        end
-        return true
+      #if event.is_a?(ButtonEvent) and selected_group = @groups.find { |g| g.selector == event.selector }
+      #  if event.state
+      #    self.current = selected_group if selected_group != @current
+      #  elsif @current.hold and @last 
+      #    self.current = @last
+      #  end
+      #  return true
+      #end
+      if ctrl = @current[event][event.selector]
+        ctrl.capture_event event
       end
-      @current.capture_event(event)
-    end
-    
-    def current=(group)
-      if @current
-        @last = @current
-        @kontrol.led @current.selector, :off
-      end
-      group.activate
-      @current = group
     end
     
   end
   
   class Group
     attr_accessor :kontrol, :manager, :selector, :controls, :hold
+
     def initialize(selector, options = {})
       @selector = selector
       
@@ -61,6 +53,10 @@ module KorgKontrol
       @hold = options[:hold]
     end
     
+    def current?
+      @manager.current = self
+    end
+    
     def add_control(control)
       control.group = self
       @controls[control.class::EVENT_TYPE] ||= []
@@ -68,17 +64,18 @@ module KorgKontrol
     end
     
     def activate
-      @kontrol.led @selector, :on, :red
+      #@kontrol.led @selector, :on, :red
       
-      # Reset display for this group's controls
+      # Activate group's controls
       @controls.each_value do |ctrls|
-        ctrls.each { |c| c.display }
+        ctrls.each { |c| c.activate }
       end
     end
-    
+        
     def capture_event(event)
       @controls[event.class].find{ |c| c.capture_event(event) } if @controls[event.class]
     end
+    
   end
   
   class GroupControl
@@ -87,19 +84,33 @@ module KorgKontrol
     def kontrol
       @group.kontrol
     end
+    
+    def activate
+      kontrol.current[EVENT_TYPE][selector] = self
+      display
+    end
   end
   
-  # Base class for indexable controls, including pads, encoders, and sliders
-  # A single index or any enumberable can be supplied. For example, to encompass all sliders
-  # with one control, you could use a range (1..16); you could also use an array to target
-  # specific indexes (e.g., [1, 5, 9, 13] for all pads in the leftmost column)
+  ### Base class for indexable controls, including pads, encoders, and sliders
+  ### A single index or any enumberable can be supplied. For example, to encompass all sliders
+  ### with one control, you could use a range (1..16); you could also use an array to target
+  ### specific indexes (e.g., [1, 5, 9, 13] for all pads in the leftmost column)
   class IndexedControl < GroupControl
     attr_accessor :indexes, :values
     
     def initialize(indexes, options = {})
       @indexes = indexes.respond_to?(:to_a) ? indexes.to_a : [*indexes]
       @options = options
-      @values = options.delete(:defaults) || {}
+      
+      # Set default values. Expand default to multiple indexes if key is an enumerable.
+      @values = (options.delete(:defaults) || {}).inject({}) do |hash, default| 
+        if default[0].respond_to?(:each)
+          default[0].each{ |v| hash[v] = default[1] }
+        else
+          hash[default[0]] = default[1]
+        end
+        hash
+      end
     end
     
     def capture_event(event)
@@ -118,13 +129,12 @@ module KorgKontrol
   end
   
   class IndexedLCDControl < IndexedControl
-    attr_accessor :label
-    
     def initialize(indexes, options = {})
       super
-      @label = options[:label]
-      @label_revert_times = {}
-      @label_revert_threads = {}
+      
+      @min = options[:min] || 0
+      @max = options[:max] || 127
+      @indexes.each { |i| @values[i] ||= (options[:default] || 0) }
     end
     
     def display_item(index)
@@ -169,16 +179,20 @@ module KorgKontrol
   class EncoderControl < IndexedLCDControl
     EVENT_TYPE = EncoderEvent
     
-    def initialize(indexes, options = {})
-      super
-      @min = options[:min] || 0
-      @max = options[:max] || 127
-      @indexes.each { |i| @values[i] ||= (options[:default] || 0) }
-    end
-    
     def process_event(event)
       val = @values[event.index] + event.direction
       @values[event.index] = val unless val < @min or val > @max
+      display_item_value event.index
+      false
+    end
+  end
+  
+  class SliderControl < IndexedLCDControl
+    EVENT_TYPE = SliderEvent
+    
+    def process_event(event)
+      @values[event.index] = @min + (event.value / 127.0 * (@max - @min))
+      @values[event.index] = @values[event.index].to_i if @options[:format] == :integer
       display_item_value event.index
       false
     end

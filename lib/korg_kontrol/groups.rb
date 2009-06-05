@@ -104,8 +104,9 @@ module KorgKontrol
     
     def capture_event(event)
       if @indexes.include?(event.index)
-        process_event event
-        display_item event.index
+        if process_event(event)
+          display_item event.index
+        end
         true
       end
     end
@@ -114,6 +115,34 @@ module KorgKontrol
       @indexes.each { |i| display_item i }
     end
     
+  end
+  
+  class IndexedLCDControl < IndexedControl
+    attr_accessor :label
+    
+    def initialize(indexes, options = {})
+      super
+      @label = options[:label]
+      @label_revert_times = {}
+      @label_revert_threads = {}
+    end
+    
+    def display_item(index)
+      kontrol.lcd index, @label, @options[:color]
+    end
+    
+    def display_item_value(index)
+      kontrol.lcd index, @values[index], @options[:color]
+      @label_revert_times[index] = Time.now + (@options[:lcd_revert_time] || 1)
+      @label_revert_threads[index] = Thread.new do
+        while Time.now < @label_revert_times[index]
+          sleep 0.1
+        end
+        display_item index
+        @label_revert_threads[index] = nil
+        self.terminate
+      end unless @label_revert_threads[index]
+    end
   end
   
   class PadControl < IndexedControl
@@ -128,6 +157,7 @@ module KorgKontrol
     def process_event(event)
       if event.state
         @values[event.index] = !@values[event.index]
+        true
       end
     end
     
@@ -136,7 +166,7 @@ module KorgKontrol
     end
   end
   
-  class EncoderControl < IndexedControl
+  class EncoderControl < IndexedLCDControl
     EVENT_TYPE = EncoderEvent
     
     def initialize(indexes, options = {})
@@ -149,10 +179,8 @@ module KorgKontrol
     def process_event(event)
       val = @values[event.index] + event.direction
       @values[event.index] = val unless val < @min or val > @max
+      display_item_value event.index
+      false
     end
-    
-    def display_item(index)
-      kontrol.lcd index, @values[index], @options[:color]
-    end    
   end
 end

@@ -58,10 +58,6 @@ module KorgKontrol
       
     end
     
-    def method_missing(method, *args)
-      puts "Methmiss: #{method.class} #{args.inspect}"
-    end
-    
     def native_mode_on
       send_sysex NATIVE_MODE_ON
       clear_all
@@ -89,44 +85,39 @@ module KorgKontrol
     end
     
     def lcd(index, text, color = :red)
-      send_sysex [0x22, 0x09] + [((LCD_COLORS[color] || 0) | index - 1)] + (0..7).collect{ |c| text.to_s[c] || 32 }
+      text_s = text.to_s
+      byte_method = text_s.respond_to?(:getbyte) ? :getbyte : :[] # Necessary because MacRuby string#[] doesn't return the byte code
+      send_sysex [0x22, 0x09] + [((LCD_COLORS[color] || 0) | index - 1)] + (0..7).collect{ |n| text_s.send(byte_method, n) || 32 }
     end
         
     def send_sysex(data)
-      #puts "Kontrol out: #{data.join(' ')}"
       @midi_out.sysex @sysex_header + data
     end
     
-    def capture_midi
-      return nil unless events = @midi_in.new_data?
-      events = events.collect do |event|
-        data = event.data[6..-2]
-        case event.data[5]
-        when 0x40
-          NativeModeEvent.new data
-        when 0x43
-          EncoderEvent.new data
-        when 0x44
-          SliderEvent.new data
-        when 0x45
-          PadEvent.new data
-        when 0x46
-          WheelEvent.new data
-        when 0x47
-          PedalEvent.new data
-        when 0x48
-          SwitchEvent.new data
-        when 0x4b
-          JoystickEvent.new data
-        else
-          KontrolEvent.new data
-        end
+    def capture(message)
+      data = message.data[5..-1]
+      event = case message.data[4]
+      when 0x40
+        NativeModeEvent.new data
+      when 0x43
+        EncoderEvent.new data
+      when 0x44
+        SliderEvent.new data
+      when 0x45
+        PadEvent.new data
+      when 0x46
+        WheelEvent.new data
+      when 0x47
+        PedalEvent.new data
+      when 0x48
+        SwitchEvent.new data
+      when 0x4b
+        JoystickEvent.new data
+      else
+        KontrolEvent.new data
       end
-      
-      events.reject do |e|
-        @managers.find { |m| m.capture_event(e) }
-      end
-      
+    
+      @managers.find { |m| m.capture_event(event) } ? nil : event
     end
     
     def set_state(states)

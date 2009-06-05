@@ -34,6 +34,8 @@ module KorgKontrol
   
   class Kontroller
     
+    LCD_SIZE = 8  # TODO: Is this different for MicroKontrol or PadKontrol?
+    
     attr_reader :managers
     
     def initialize(midi_out, midi_in, sysex_header)
@@ -84,8 +86,12 @@ module KorgKontrol
       send_sysex [1, @pad_ids[pad] + 32, c[1] ? LED_STATES[state] : 0] if multicolor
     end
     
-    def lcd(index, text, color = :red)
+    def lcd(index, text, color = :red, justification = :centered)
       text_s = text.to_s
+      if justification == :centered
+        pad = (LCD_SIZE - text_s.size) / 2.0
+        text_s = "#{' ' * pad.floor}#{text_s}#{' ' * pad.ceil}"
+      end
       byte_method = text_s.respond_to?(:getbyte) ? :getbyte : :[] # Necessary because MacRuby string#[] doesn't return the byte code
       send_sysex [0x22, 0x09] + [((LCD_COLORS[color] || 0) | index - 1)] + (0..7).collect{ |n| text_s.send(byte_method, n) || 32 }
     end

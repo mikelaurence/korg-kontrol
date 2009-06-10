@@ -17,6 +17,7 @@ module KorgKontrol
   
   class IndexedEvent < KontrolEvent
     attr_reader :index
+    alias selector index
     def selector
       @index
     end
@@ -24,6 +25,7 @@ module KorgKontrol
   
   class TypedEvent < KontrolEvent
     attr_reader :type
+    alias selector type
     def selector
       @type
     end

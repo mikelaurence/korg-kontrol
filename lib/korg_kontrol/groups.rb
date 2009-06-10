@@ -51,12 +51,10 @@ module KorgKontrol
   class Group
     attr_accessor :kontrol, :manager, :selector, :controls, :hold
 
-    def initialize(selector, options = {})
-      @selector = selector
-      
+    def initialize(options = {})
       # Setup controls
       @controls = {}
-      options[:controls].each { |c| add_control c } if options[:controls]
+      [*options[:controls]].each { |c| add_control c } if options[:controls]
       
       # Setup options
       @hold = options[:hold]
@@ -86,11 +84,22 @@ module KorgKontrol
   end
   
   class GroupControl
-    attr_accessor :group, :action
+    attr_accessor :group, :action, :current_values
     
     def initialize(indexes, options = {})
       @action = options.delete(:action)
-      @midi_out = options.delete(:midi_out)
+      @midi_out = options.delete(:midi_out)  
+      
+      # Set default values. Expand default to multiple selectors if key is an enumerable.
+      @current_values = (options.delete(:defaults) || {}).inject({}) do |hash, default| 
+        if default[0].respond_to?(:each)
+          default[0].each{ |v| hash[v] = default[1] }
+        else
+          hash[default[0]] = default[1]
+        end
+        hash
+      end
+      
       @options = options
     end
     
@@ -100,6 +109,36 @@ module KorgKontrol
     
     def manager
       @group.manager
+    end
+    
+    ### Returns an enumerable containing which selectors this control responds to
+    def selectors
+      raise "GroupControl#selectors must be implemented by subclasses!"
+    end
+    
+    def activate
+      selectors.each { |i| manager.current[key][i] = self }
+      display
+    end
+    
+    def display
+      selectors.each { |i| display_item i }
+    end
+    
+    ### Attempts to capture and process incoming hardware messages.
+    ### If the event is applicable to this control, process it, execute our action (if defined), and display the relevant item.
+    ### If not applicable, do not capture it (so it is passed to subsequent controls in Group#capture_event)
+    def capture_event(event)
+      if selectors.include?(event.selector)
+        process_event event
+        process_result execute_action(action_parameters(event)) if @action
+        display_item event.selector
+        true
+      end
+    end
+    
+    def action_parameters(event)
+      [event, @current_values[event.selector]]
     end
     
     def execute_action(params)
@@ -120,62 +159,90 @@ module KorgKontrol
     end
   end
   
+  module LEDControl    
+    def display_item(selector)
+      kontrol.led selector, @current_values[selector] ? :on : :off, @current_values[selector]
+    end
+    
+    def process_event(event)
+      if event.state
+        kontrol.led event.selector, :oneshot, @current_values[event.selector]
+      end
+    end
+  end
+  
+  class SwitchControl < GroupControl
+    include LEDControl
+    attr_accessor :switches
+    
+    def initialize(switches, options = {})
+      super
+      @switches = switches.respond_to?(:to_a) ? switches.to_a : [*switches]
+    end
+    
+    def selectors
+      @switches
+    end
+    
+    def key
+      SwitchEvent
+    end
+  end
+  
+  class SwitchGroupSelect < SwitchControl
+    attr_accessor :groups
+        
+    def initialize(default, groups = {})
+      @groups = groups
+      @switches = groups.keys
+      @current = default
+      super @switches, :defaults => { default => :on }
+    end
+    
+    def activate
+      super
+      activate_group @current
+    end
+    
+    def activate_group(selector)
+      @current_values[selector] = true
+      kontrol.led selector, :on
+      @groups[selector].activate
+    end
+    
+    def process_event(event)
+      if event.state        
+        if @current
+          @last = @current
+          @current_values[@last] = false
+          kontrol.led @last, :off
+        end
+        
+        @current = event.selector
+        activate_group @current
+      end
+    end
+  end
+  
   ### Base class for indexable controls, including pads, encoders, and sliders
   ### A single index or any enumberable can be supplied. For example, to encompass all sliders
   ### with one control, you could use a range (1..16); you could also use an array to target
   ### specific indexes (e.g., [1, 5, 9, 13] for all pads in the leftmost column)
   class IndexedControl < GroupControl
-    attr_accessor :indexes, :current_values
+    attr_accessor :indexes
     
     def initialize(indexes, options = {})
       super
       @indexes = indexes.respond_to?(:to_a) ? indexes.to_a : [*indexes]
-      
-      # Set default values. Expand default to multiple indexes if key is an enumerable.
-      @current_values = (options.delete(:defaults) || {}).inject({}) do |hash, default| 
-        if default[0].respond_to?(:each)
-          default[0].each{ |v| hash[v] = default[1] }
-        else
-          hash[default[0]] = default[1]
-        end
-        hash
-      end
     end
     
-    def capture_event(event)
-      if @indexes.include?(event.index)
-        process_event event
-        process_result execute_action(action_parameters(event)) if @action
-        display_item event.index
-        true
-      end
+    def selectors
+      @indexes
     end
-    
-    def display
-      @indexes.each { |i| display_item i }
-    end
-    
-    def activate
-      @indexes.each { |i| manager.current[key][i] = self }
-      display
-    end
-    
   end
   
   class PadControl < IndexedControl
-    def process_event(event)
-      if event.state
-        kontrol.led event.index, :oneshot, @current_values[event.index]
-      end
-    end
-    
-    def display_item(index)
-      kontrol.led index, @current_values[index] ? :on : :off, @current_values[index]
-    end
-    
-    def action_parameters(event)
-      [event.index, event.state, @current_values[event.index]]
-    end
+    include LEDControl
     
     def key
       PadEvent
@@ -294,6 +361,8 @@ module KorgKontrol
     end
   end
   
+  ### Included automatically by EncoderControl & SliderControl if values are an array.
+  ### Transforms the actual numeric value of the control into a position in the array.
   module IndexedEnumerableControl
     def init_defaults
       @current_value_indexes = {}
@@ -309,6 +378,7 @@ module KorgKontrol
     end
   end
   
+  ### Included automatically by EncoderControl if values are an array. Assists IndexedEnumerableControl module.
   module EncoderEnumerable
     def process_event(event)
       idx = @current_value_indexes[event.index] + event.direction;
@@ -322,6 +392,7 @@ module KorgKontrol
     end
   end
   
+  ### Included automatically by SliderControl if values are an array. Assists IndexedEnumerableControl module.
   module SliderEnumerable
     def process_event(event)
       process_values event.index, (event.value / 128 * @values.size).floor

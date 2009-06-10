@@ -2,8 +2,10 @@
 
 module KorgKontrol
   
+  include MidiLex::Messages
+  
   class GroupManager
-    attr_accessor :kontrol, :groups, :current
+    attr_accessor :kontrol, :groups, :current, :midi_out
     
     def initialize(options = {})
       @midi_out = options[:midi_out]
@@ -70,9 +72,7 @@ module KorgKontrol
       @controls[control.key] << control
     end
     
-    def activate
-      #@kontrol.led @selector, :on, :red
-      
+    def activate      
       # Activate group's controls
       @controls.each_value do |ctrls|
         ctrls.each { |c| c.activate }
@@ -89,8 +89,9 @@ module KorgKontrol
     attr_accessor :group, :action
     
     def initialize(indexes, options = {})
+      @action = options.delete(:action)
+      @midi_out = options.delete(:midi_out)
       @options = options
-      @midi_out = options[:midi_out]
     end
     
     def kontrol
@@ -113,8 +114,8 @@ module KorgKontrol
       case result
       when Enumerable
         result.each { |e| process_result e }
-      when MidiMix::MidiMessage
-        @options[:midi_out] || manager.midi_out << result
+      when Core::MidiMessage
+        (@options[:midi_out] || manager.midi_out) << result
       end
     end
   end
@@ -173,7 +174,7 @@ module KorgKontrol
     end
     
     def action_parameters(event)
-      [event.index, @current_values[event.index]]
+      [event.index, event.state, @current_values[event.index]]
     end
     
     def key

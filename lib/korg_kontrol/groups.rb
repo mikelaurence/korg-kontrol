@@ -84,14 +84,20 @@ module KorgKontrol
   end
   
   class GroupControl
-    attr_accessor :group, :action, :current_values
+    attr_accessor :group, :action, :defaults, :current_values
     
     def initialize(indexes, options = {})
       @action = options.delete(:action)
       @midi_out = options.delete(:midi_out)  
+      @defaults = options.delete(:defaults) || {}
+      reset_to_defaults
       
+      @options = options
+    end
+    
+    def reset_to_defaults
       # Set default values. Expand default to multiple selectors if key is an enumerable.
-      @current_values = (options.delete(:defaults) || {}).inject({}) do |hash, default| 
+      @current_values = @defaults.inject({}) do |hash, default| 
         if default[0].respond_to?(:each)
           default[0].each{ |v| hash[v] = default[1] }
         else
@@ -99,8 +105,6 @@ module KorgKontrol
         end
         hash
       end
-      
-      @options = options
     end
     
     def kontrol

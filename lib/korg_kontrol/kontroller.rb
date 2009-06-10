@@ -26,7 +26,7 @@ module KorgKontrol
 	STATE_ONESHOT = 64
 	STATE_BLINK = 96
 	
-	LED_STATES = { :off => 0, :on => 32, :oneshot => 64, :blink => 96 }
+	LED_STATES = { :off => 0, :on => 32, :oneshot => 64, :blink => 99 }
 	LED_COLORS = { :red => [true, false], :green => [false, true], :orange => [true, true] }
 	LCD_COLORS = { :off => 0, :red => 1 << 4, :green => 2 << 4, :orange => 3 << 4}
 
@@ -82,8 +82,9 @@ module KorgKontrol
       p = @pad_ids[pad]
       multicolor = p < 16 or p == :previous or p == :next
       c = LED_COLORS[color] || LED_COLORS[:red]
-      send_sysex [1, @pad_ids[pad], (!multicolor or c[0]) ? LED_STATES[state] : 0]
-      send_sysex [1, @pad_ids[pad] + 32, c[1] ? LED_STATES[state] : 0] if multicolor
+      led_state = state.is_a?(Fixnum) ? state : LED_STATES[state]
+      send_sysex [1, @pad_ids[pad], (!multicolor or c[0]) ? led_state : 0]
+      send_sysex [1, @pad_ids[pad] + 32, c[1] ? led_state : 0] if multicolor
     end
     
     def lcd(index, text, color = :red, justification = :centered)

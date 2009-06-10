@@ -162,8 +162,18 @@ module KorgKontrol
   end
   
   class PadControl < IndexedControl
+    def process_event(event)
+      if event.state
+        kontrol.led event.index, :oneshot, @current_values[event.index]
+      end
+    end
+    
     def display_item(index)
-      kontrol.led index, :oneshot
+      kontrol.led index, @current_values[index] ? :on : :off, @current_values[index]
+    end
+    
+    def action_parameters(event)
+      [event.index, @current_values[event.index]]
     end
     
     def key
@@ -171,22 +181,34 @@ module KorgKontrol
     end
   end
   
+  class PadControlSelect < PadControl    
+    def process_event(event)
+      if event.state
+        if @current_values[event.index]
+          @last = @current
+          @current = event.index
+          display_item @last if @last
+        end
+      end
+    end
+    
+    def display_item(index)
+      kontrol.led index, @current_values[index] ? (@current == index ? :blink : :on) : :off, @current_values[index]
+    end
+  end
+  
   class PadControlToggle < PadControl
     def process_event(event)
       if event.state
         @current_values[event.index] = !@current_values[event.index]
-        true
       end
     end
     
     def display_item(index)
       kontrol.led index, @current_values[index] ? :on : :off, @options[:color]
     end
-    
-    def action_parameters(event)
-      [event.index, @current_values[event.index]]
-    end
   end
+  
   
   
   # LCDs & indexed labeled controls

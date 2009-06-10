@@ -333,7 +333,7 @@ module KorgKontrol
     
     def display_item(index)
       if @options[:display] != false
-        kontrol.lcd index, @current_values[index], @options[:color]
+        kontrol.lcd index, @current_values[index], @options[:color] || :green
         manager.lcd_revert index, @options[:lcd_revert_time] || 1 unless @options[:revert_lcd] = false
       end
     end

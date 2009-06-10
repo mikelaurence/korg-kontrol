@@ -52,7 +52,7 @@ module KorgKontrol
     attr_reader :direction
     def initialize(data)
       @index = data[0] + 1
-      @direction = data[1] == 1 ? 1 : -1
+      @direction = data[1] < 64 ? 1 : -1
     end
   end
 

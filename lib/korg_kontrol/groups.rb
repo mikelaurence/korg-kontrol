@@ -327,12 +327,6 @@ module KorgKontrol
         extend IndexedEnumerableControl
         extend key == EncoderEvent ? EncoderEnumerable : SliderEnumerable
       end
-
-      init_defaults
-    end
-
-    def init_defaults
-      @indexes.each { |i| @current_values[i] = @options[:default] || 0 }
     end
     
     def display_item(index)

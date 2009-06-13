@@ -236,20 +236,20 @@ module KorgKontrol
   class SwitchHoldGroup < SwitchControl
     
     def initialize(selector, hold_group, options = {})
+      @selector = selector
       @hold_group = hold_group
       super selector, options
     end
     
     def process_event(event)
-      puts event
-      kontrol.led event.selector, event.state ? :on : :off, @options[:color]
+      @current_values[@selector] = (event.state ? @options[:color] || :red : false)
       if event.state
         @snapshot = @hold_group.snapshot
         @hold_group.activate
       else
         @snapshot.revert
       end      
-    end    
+    end
   end
   
   ### Base class for indexable controls, including pads, encoders, and sliders

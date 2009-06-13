@@ -49,13 +49,13 @@ module KorgKontrol
         :message => 0x11,
       	:scene => 0x12,
       	:exit => 0x13,
-      	:hex_lock => 0x15,
       	:enter => 0x14,
+      	:hex_lock => 0x15,
       	:tempo => 0x16,
       	:next => 0x18,
       	:previous => 0x19,
-      	:sw1 => 0x20,
-      	:sw2 => 0x21
+      	:sw1 => 0x1a,
+      	:sw2 => 0x1b
       }.merge((1..16).inject({}){ |h, p| h["pad_#{p}".to_sym] = h[p] = p - 1; h })
       
     end
@@ -79,6 +79,7 @@ module KorgKontrol
     end
     
     def led(pad, state, color = :red)
+      puts "#{pad} #{state} #{color}"
       p = @pad_ids[pad]
       multicolor = p < 16 or p == :previous or p == :next
       c = LED_COLORS[color] || LED_COLORS[:red]

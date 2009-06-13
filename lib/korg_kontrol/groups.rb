@@ -13,13 +13,12 @@ module KorgKontrol
       @selectors = []
       
       # Setup hash for active controls
-      @current = [PadEvent, SwitchEvent, EncoderEvent, SliderEvent, WheelEvent, PedalEvent, JoystickEvent, KontrolEvent, NativeModeEvent, LCDControl].inject({}) do |hash, event|
-        hash[event] = {}; hash
+      @current = GROUP_EVENT_TYPES.inject({}) do |hash, type|
+        hash[type] = {}; hash
       end
     end
     
     def add_group(group)
-      #raise "Already managing a group with the selector '#{group.selector}'" if @groups.find{ |g| g.selector == group.selector }
       group.kontrol = @kontrol
       group.manager = self
       @groups << group
@@ -27,14 +26,6 @@ module KorgKontrol
     end
     
     def capture_event(event)
-      #if event.is_a?(ButtonEvent) and selected_group = @groups.find { |g| g.selector == event.selector }
-      #  if event.state
-      #    self.current = selected_group if selected_group != @current
-      #  elsif @current.hold and @last 
-      #    self.current = @last
-      #  end
-      #  return true
-      #end
       if ctrl = @current[event.class][event.selector]
         ctrl.capture_event event
       end
@@ -49,15 +40,12 @@ module KorgKontrol
   end
   
   class Group
-    attr_accessor :kontrol, :manager, :selector, :controls, :hold
+    attr_accessor :kontrol, :manager, :selector, :controls
 
     def initialize(options = {})
       # Setup controls
-      @controls = {}
+      @controls = []
       [*options[:controls]].each { |c| add_control c } if options[:controls]
-      
-      # Setup options
-      @hold = options[:hold]
     end
     
     def current?
@@ -66,21 +54,38 @@ module KorgKontrol
     
     def add_control(control)
       control.group = self
-      @controls[control.key] ||= []
-      @controls[control.key] << control
+      @controls << control
     end
     
-    def activate      
-      # Activate group's controls
-      @controls.each_value do |ctrls|
-        ctrls.each { |c| c.activate }
-      end
+    ### Activate group's controls
+    def activate
+      @controls.each { |c| c.activate }
     end
         
-    def capture_event(event)
-      @controls[event.class].find{ |c| c.capture_event(event) } if @controls[event.class]
+    #def capture_event(event)
+    #  @controls.find{ |c| c.capture_event(event) }
+    #end
+    
+    ### Returns a snapshot of all currently activated controls which belong to this group
+    ### This snapshot can later be reverted to via the GroupSnapshot#revert method
+    def snapshot
+      GroupSnapshot.new(@controls.inject([]) { |array, control|
+        array += control.selectors.collect{ |s| manager.current[control.key][s] }; array
+      }.compact.uniq)
     end
     
+  end
+  
+  ### Represents the active status of a group's controls at a single point in time.
+  ### Can be used to return to that status after it has changed.
+  class GroupSnapshot
+    def initialize(snaps)
+      @snaps = snaps
+    end
+    
+    def revert
+      @snaps.each { |snap| snap.activate }
+    end
   end
   
   class GroupControl
@@ -121,12 +126,12 @@ module KorgKontrol
     end
     
     def activate
-      selectors.each { |i| manager.current[key][i] = self }
+      selectors.each { |s| manager.current[key][s] = self }
       display
     end
     
     def display
-      selectors.each { |i| display_item i }
+      selectors.each { |s| display_item s }
     end
     
     ### Attempts to capture and process incoming hardware messages.
@@ -226,6 +231,25 @@ module KorgKontrol
         activate_group @current
       end
     end
+  end
+  
+  class SwitchHoldGroup < SwitchControl
+    
+    def initialize(selector, hold_group, options = {})
+      @hold_group = hold_group
+      super selector, options
+    end
+    
+    def process_event(event)
+      puts event
+      kontrol.led event.selector, event.state ? :on : :off, @options[:color]
+      if event.state
+        @snapshot = @hold_group.snapshot
+        @hold_group.activate
+      else
+        @snapshot.revert
+      end      
+    end    
   end
   
   ### Base class for indexable controls, including pads, encoders, and sliders
@@ -396,4 +420,6 @@ module KorgKontrol
       process_values event.index, (event.value / 128 * @values.size).floor
     end
   end
+  
+  GROUP_EVENT_TYPES = [PadEvent, SwitchEvent, EncoderEvent, SliderEvent, WheelEvent, PedalEvent, JoystickEvent, KontrolEvent, NativeModeEvent, LCDControl]
 end

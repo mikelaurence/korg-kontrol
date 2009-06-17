@@ -1,7 +1,8 @@
 # Control Modules
 
 module KorgKontrol
-  
+
+  include MidiLex
   include MidiLex::Messages
   
   class GroupManager
@@ -162,7 +163,7 @@ module KorgKontrol
       case result
       when Enumerable
         result.each { |e| process_result e }
-      when Core::MidiMessage
+      when MidiLex::Messages::Core::MidiMessage
         (@options[:midi_out] || manager.midi_out) << result
       end
     end

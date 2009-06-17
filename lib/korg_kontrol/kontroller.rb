@@ -79,7 +79,6 @@ module KorgKontrol
     end
     
     def led(pad, state, color = :red)
-      puts "#{pad} #{state} #{color}"
       p = @pad_ids[pad]
       multicolor = p < 16 or p == :previous or p == :next
       c = LED_COLORS[color] || LED_COLORS[:red]

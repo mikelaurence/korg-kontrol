@@ -7,6 +7,12 @@ module KorgKontrol
       @data = data
     end
     
+    def initialize_from_hash(data)
+      data.each_pair do |key, value|
+        instance_variable_set "@#{key}", value
+      end
+    end
+    
     def selector
       :default
     end
@@ -34,17 +40,25 @@ module KorgKontrol
   class PadEvent < IndexedEvent
     attr_accessor :state, :velocity
     def initialize(data)
-      @index = (data[0] & 15) + 1
-      @state = data[0] > 15
-      @velocity = data[1]
+      if data.is_a?(Hash)
+        initialize_from_hash(data)
+      else
+        @index = (data[0] & 15) + 1
+        @state = data[0] > 15
+        @velocity = data[1]
+      end
     end
   end
 
   class SwitchEvent < TypedEvent
     attr_reader :state, :type
     def initialize(data)
-      @type = SWITCH_INPUT_VALUES[data[0]]
-      @state = data[1] == 127
+      if data.is_a?(Hash)
+        initialize_from_hash(data)
+      else
+        @type = SWITCH_INPUT_VALUES[data[0]]
+        @state = data[1] == 127
+      end
     end
   end
 

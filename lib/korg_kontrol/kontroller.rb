@@ -35,9 +35,8 @@ module KorgKontrol
   class Kontroller
     
     LCD_SIZE = 8  # TODO: Is this different for MicroKontrol or PadKontrol?
-    
-    attr_accessor :virtual
-    attr_reader :managers
+
+    attr_reader :managers, :virtual
     
     def initialize(midi_out, midi_in, sysex_header)
       @midi_out = midi_out
@@ -58,7 +57,11 @@ module KorgKontrol
       	:sw1 => 0x1a,
       	:sw2 => 0x1b
       }.merge((1..16).inject({}){ |h, p| h["pad_#{p}".to_sym] = h[p] = p - 1; h })
-      
+    end
+    
+    def virtual=(virt)
+      @virtual = virt
+      @virtual.controller = self if @virtual.respond_to?(:controller=)
     end
     
     def native_mode_on
@@ -96,7 +99,7 @@ module KorgKontrol
         pad = (LCD_SIZE - text_s.size) / 2.0
         text_s = "#{' ' * pad.floor}#{text_s}#{' ' * pad.ceil}"
       end
-      byte_method = text_s.respond_to?(:getbyte) ? :getbyte : :[] # Necessary because MacRuby string#[] doesn't return the byte code
+      byte_method = text_s.respond_to?(:characterAtIndex) ? :characterAtIndex : :[] # Necessary because MacRuby string#[] doesn't return the byte code
       send_sysex [0x22, 0x09] + [((LCD_COLORS[color] || 0) | index - 1)] + (0..7).collect{ |n| text_s.send(byte_method, n) || 32 }
       
       virtual.lcd index, text, color, justification if virtual
@@ -129,6 +132,10 @@ module KorgKontrol
         KontrolEvent.new data
       end
     
+      capture_event(event)
+    end
+    
+    def capture_event(event)
       @managers.find { |m| m.capture_event(event) } ? nil : event
     end
     

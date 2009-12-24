@@ -32,6 +32,8 @@ class Kontrol49ViewController < NSViewController
     view.addSubview @buttonMatrix
     
     @leds = {
+      :sw1 => [@switchMatrix, 0, 0],
+      :sw2 => [@switchMatrix, 0, 1],
       :setting => [@buttonMatrix, 0, 0],
       :message => [@buttonMatrix, 0, 1],
       :scene => [@buttonMatrix, 1, 0],
@@ -46,8 +48,8 @@ class Kontrol49ViewController < NSViewController
       hash
     end)
     
+    @switches = [:sw1, :sw2]
     @buttons = [:setting, :message, :scene, :exit, :hex_lock, :enter, :previous, :next]
-    
     @colors = {
       :red => NSColor.redColor,
       :orange => NSColor.orangeColor,
@@ -55,20 +57,32 @@ class Kontrol49ViewController < NSViewController
     }
   end
   
+  def viewHeight
+    view.frame.size.height
+  end
+  
+  def switchMatrixFrame
+    NSMakeRect 0, viewHeight * 0.5, viewHeight * 0.5, viewHeight * 0.125
+  end
+  
+  def switchCellSize
+    NSMakeSize viewHeight * 0.25, viewHeight * 0.25
+  end
+  
   def padMatrixFrame
-    NSMakeRect 0, 0, view.frame.size.height, view.frame.size.height
+    NSMakeRect viewHeight * 0.5 + 10.0, 0, viewHeight, viewHeight
   end
   
   def padCellSize
-    NSMakeSize view.frame.size.height / 4.0, view.frame.size.height / 4.0
+    NSMakeSize viewHeight * 0.25, viewHeight * 0.25
   end
   
   def buttonMatrixFrame
-    NSMakeRect view.frame.size.height + 10.0, 0, view.frame.size.height / 2.0, view.frame.size.height / 2.0
+    NSMakeRect viewHeight * 1.5 + 20.0, 0, viewHeight * 0.5, viewHeight * 0.5
   end
   
   def buttonMatrixSize
-    NSMakeSize view.frame.size.height / 4.0, view.frame.size.height / 8.0
+    NSMakeSize viewHeight * 0.25, viewHeight * 0.125
   end
   
   
@@ -79,7 +93,6 @@ class Kontrol49ViewController < NSViewController
     color = state == :off ? NSColor.grayColor : @colors[color]
     
     p = @leds[pad]
-    puts "pad: #{pad} #{pad.class} #{p}"
     p[0].cellAtRow(p[1], column:p[2]).objectValue = color
   end
   
@@ -95,7 +108,11 @@ class Kontrol49ViewController < NSViewController
   end
   
   def clickedButton
-    @controller.capture_event SwitchEvent.new :type => @buttons[@buttonMatrix.selectedRow * 2 + @buttonMatrix.selectedColumn], :state => :on
+    @controller.capture_event SwitchEvent.new :type => @buttons[@buttonMatrix.selectedRow * 2 + @buttonMatrix.selectedColumn], :state => :on if @controller
+  end
+  
+  def clickedSwitch
+    @controller.capture_event SwitchEvent.new :type => @switches[@buttonMatrix.selectedColumn], :state => :on if @controller
   end
   
 end

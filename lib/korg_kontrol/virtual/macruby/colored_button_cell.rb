@@ -1,4 +1,4 @@
-class ColoredButtonCell < NSActionCell
+class ColoredButtonCell < NSCell
 
   # attr_accessor :colors
   # 
@@ -11,6 +11,15 @@ class ColoredButtonCell < NSActionCell
     fr = NSMakeRect(frame.origin.x, frame.origin.y, frame.size.width - 2, frame.size.height - 2)
     (objectValue and objectValue.is_a?(NSColor) ? objectValue : NSColor.whiteColor).set
     NSRectFill fr
+  end
+  
+  def startTrackingAt(startPoint, inView:controlView)
+    controlView.target.send controlView.action, controlView, true
+    true
+  end
+  
+  def stopTracking(lastPoint, at:stopPoint, inView:controlView, mouseIsUp:mouseIsUp)
+    controlView.target.send controlView.action, controlView, false unless mouseDownFlags == 262401 # ( ctrl key )
   end
   
 end

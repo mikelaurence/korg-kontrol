@@ -10,26 +10,32 @@ class Kontrol49ViewController < NSViewController
     # Create matrices
     cell = ColoredButtonCell.new
     
-    @switchMatrix = NSMatrix.alloc.initWithFrame(switchMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:1, numberOfColumns:2)
+    @switchMatrix = VirtualButtonMatrix.alloc.initWithFrame(switchMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:1, numberOfColumns:2)
     @switchMatrix.cellSize = switchCellSize
     @switchMatrix.target = self
-    @switchMatrix.action = :clickedSwitch
+    @switchMatrix.action = :clickedMatrix
     @switchMatrix.cells.each { |cell| cell.objectValue = NSColor.grayColor }
     view.addSubview @switchMatrix
     
-    @padMatrix = NSMatrix.alloc.initWithFrame(padMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:4, numberOfColumns:4)
+    @padMatrix = VirtualButtonMatrix.alloc.initWithFrame(padMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:4, numberOfColumns:4)
     @padMatrix.cellSize = padCellSize
     @padMatrix.target = self
-    @padMatrix.action = :clickedPad
+    @padMatrix.action = :clickedMatrix
     @padMatrix.cells.each { |cell| cell.objectValue = NSColor.grayColor }
     view.addSubview @padMatrix
     
-    @buttonMatrix = NSMatrix.alloc.initWithFrame(buttonMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:4, numberOfColumns:2)
+    @buttonMatrix = VirtualButtonMatrix.alloc.initWithFrame(buttonMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:4, numberOfColumns:2)
     @buttonMatrix.cellSize = buttonMatrixSize
     @buttonMatrix.target = self
-    @buttonMatrix.action = :clickedButton
+    @buttonMatrix.action = :clickedMatrix
     @buttonMatrix.cells.each { |cell| cell.objectValue = NSColor.grayColor }
     view.addSubview @buttonMatrix
+    
+    @matrices = {
+      @switchMatrix => { :eventClass => SwitchEvent },
+      @padMatrix => { :eventClass => PadEvent },
+      @buttonMatrix => { :eventClass => SwitchEvent }
+    }
     
     @leds = {
       :sw1 => [@switchMatrix, 0, 0],
@@ -89,7 +95,6 @@ class Kontrol49ViewController < NSViewController
   # Kontrol actions
   
   def led(pad, state, color = :red)
-    puts "virtual led: #{pad} #{state} #{color}"
     color = state == :off ? NSColor.grayColor : @colors[color]
     
     p = @leds[pad]
@@ -101,18 +106,16 @@ class Kontrol49ViewController < NSViewController
   end
   
   
-  # View actions
+  # View actions 
+  # Note: these are using a stupid hack to avoid double action on mouse-up ("return if down.is_a?(NSMatrix)"). Not sure where it's
+  # coming from; overriding mouseDown in the custom NSMatrix and doing nothing causes no actions, but sending a trackMouse message
+  # to the clicked cell brings it back.
   
-  def clickedPad
-    @controller.capture_event PadEvent.new :index => @padMatrix.selectedRow * 4 + @padMatrix.selectedColumn, :state => :on, :velocity => 127 if @controller
-  end
-  
-  def clickedButton
-    @controller.capture_event SwitchEvent.new :type => @buttons[@buttonMatrix.selectedRow * 2 + @buttonMatrix.selectedColumn], :state => :on if @controller
-  end
-  
-  def clickedSwitch
-    @controller.capture_event SwitchEvent.new :type => @switches[@buttonMatrix.selectedColumn], :state => :on if @controller
+  def clickedMatrix(matrix = nil, down = false)
+    return if down.is_a?(NSMatrix)
+    idx = matrix.selectedRow * matrix.numberOfColumns + matrix.selectedColumn
+    #puts "generating #{@matrices[matrix][:eventClass]}, index: #{idx}, down: #{down}"
+    @controller.capture_event @matrices[matrix][:eventClass].new :index => idx, :state => (down ? :on : :off), :velocity => 127 if @controller and idx >= 0
   end
   
 end

@@ -164,7 +164,9 @@ module KorgKontrol
       when Enumerable
         result.each { |e| process_result e }
       when MidiLex::Messages::Core::MidiMessage
-        (@options[:midi_out] || manager.midi_out) << result
+        if m = @options[:midi_out] || manager.midi_out
+          m << result
+        end
       end
     end
   end

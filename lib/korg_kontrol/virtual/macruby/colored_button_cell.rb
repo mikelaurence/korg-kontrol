@@ -15,7 +15,6 @@ class ColoredButtonCell < NSCell
     objectValue[0] += 1
     objectValue[0] = 0 if objectValue[0] > 1
 
-    puts "cell mousedown #{objectValue}"
     controlView.target.send controlView.action, controlView, objectValue[0] == 1
     true
   end
@@ -24,7 +23,6 @@ class ColoredButtonCell < NSCell
     unless mouseDownFlags == TOGGLE_FLAGS
       objectValue[0] = 0  # Mouse-up always sets "off" state
 
-      puts "cell mouseup #{objectValue}"
       controlView.target.send controlView.action, controlView, false
     end
   end

@@ -123,7 +123,7 @@ class Kontrol49ViewController < NSViewController
       event = eventClass.new types ?
         { :type => types[idx], :state => down } :
         { :index => idx, :state => down, :velocity => 127 }
-      puts "#{event}"
+      #puts "#{event}"
       @controller.capture_event event
     end
   end

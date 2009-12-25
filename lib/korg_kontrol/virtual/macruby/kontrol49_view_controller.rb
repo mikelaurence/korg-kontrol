@@ -9,26 +9,31 @@ class Kontrol49ViewController < NSViewController
     
     # Create matrices
     cell = ColoredButtonCell.new
+    colors = { 1 => NSColor.grayColor, 2 => NSColor.redColor, 3 => NSColor.greenColor, 4 => NSColor.orangeColor }
+    colors.each_pair{ |value, color| colors[value * -1] = color.shadowWithLevel(0.2) }
     
     @switchMatrix = VirtualButtonMatrix.alloc.initWithFrame(switchMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:1, numberOfColumns:2)
+    @switchMatrix.colors = colors
     @switchMatrix.cellSize = switchCellSize
     @switchMatrix.target = self
     @switchMatrix.action = :clickedMatrix
-    @switchMatrix.cells.each { |cell| cell.objectValue = NSColor.grayColor }
+    @switchMatrix.cells.each { |cell| cell.objectValue = [0, NSColor.grayColor] }
     view.addSubview @switchMatrix
     
     @padMatrix = VirtualButtonMatrix.alloc.initWithFrame(padMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:4, numberOfColumns:4)
+    @padMatrix.colors = colors
     @padMatrix.cellSize = padCellSize
     @padMatrix.target = self
     @padMatrix.action = :clickedMatrix
-    @padMatrix.cells.each { |cell| cell.objectValue = NSColor.grayColor }
+    @padMatrix.cells.each { |cell| cell.objectValue = [0, NSColor.grayColor] }
     view.addSubview @padMatrix
     
     @buttonMatrix = VirtualButtonMatrix.alloc.initWithFrame(buttonMatrixFrame, mode:NSTrackModeMatrix, prototype:cell, numberOfRows:4, numberOfColumns:2)
+    @buttonMatrix.colors = colors
     @buttonMatrix.cellSize = buttonMatrixSize
     @buttonMatrix.target = self
     @buttonMatrix.action = :clickedMatrix
-    @buttonMatrix.cells.each { |cell| cell.objectValue = NSColor.grayColor }
+    @buttonMatrix.cells.each { |cell| cell.objectValue = [0, NSColor.grayColor] }
     view.addSubview @buttonMatrix
     
     @matrices = {
@@ -93,10 +98,10 @@ class Kontrol49ViewController < NSViewController
   # Kontrol actions
   
   def led(pad, state, color = :red)
-    color = state == :off ? NSColor.grayColor : @colors[color]
-    
-    p = @leds[pad]
-    p[0].cellAtRow(p[1], column:p[2]).objectValue = color
+    pad_config = @leds[pad]
+    matrix = pad_config[0]
+    cell = matrix.cellAtRow(pad_config[1], column:pad_config[2])
+    cell.objectValue = [cell.objectValue[0], (state != :off ? @colors[color] : NSColor.grayColor)]
   end
   
   def lcd(index, text, color = :red, justification = :centered)
@@ -118,6 +123,7 @@ class Kontrol49ViewController < NSViewController
       event = eventClass.new types ?
         { :type => types[idx], :state => down } :
         { :index => idx, :state => down, :velocity => 127 }
+      puts "#{event}"
       @controller.capture_event event
     end
   end

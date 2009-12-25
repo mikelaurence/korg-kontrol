@@ -48,6 +48,10 @@ module KorgKontrol
         @velocity = data[1]
       end
     end
+    
+    def to_s
+      "[PadEvent index: #{@index}, state: #{@state}, velocity: #{@velocity}]"
+    end
   end
 
   class SwitchEvent < TypedEvent
@@ -59,6 +63,10 @@ module KorgKontrol
         @type = SWITCH_INPUT_VALUES[data[0]]
         @state = data[1] == 127
       end
+    end
+
+    def to_s
+      "[SwitchEvent type: #{@type}, state: #{@state}]"
     end
   end
 

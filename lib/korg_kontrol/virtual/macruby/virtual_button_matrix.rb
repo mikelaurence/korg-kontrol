@@ -1,4 +1,7 @@
 class VirtualButtonMatrix < NSMatrix
+  
+  attr_accessor :colors
+  
   # 
   # def mouseDown(event)
   #   row = Pointer.new_with_type('q')

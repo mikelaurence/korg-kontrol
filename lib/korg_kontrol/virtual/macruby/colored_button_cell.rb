@@ -1,11 +1,6 @@
 class ColoredButtonCell < NSCell
-
-  # attr_accessor :colors
-  # 
-  # def currentColor
-  #   puts "Color cell value #{integerValue}, colors: #{colors}"
-  #   (colors || [])[self.integerValue] || NSColor.whiteColor
-  # end
+  
+  TOGGLE_FLAGS = 262401   # ( ctrl key )
   
   def drawInteriorWithFrame(frame, inView:view)
     fr = NSMakeRect(frame.origin.x, frame.origin.y, frame.size.width - 2, frame.size.height - 2)
@@ -14,12 +9,24 @@ class ColoredButtonCell < NSCell
   end
   
   def startTrackingAt(startPoint, inView:controlView)
-    controlView.target.send controlView.action, controlView, true
+    puts "start"
+    puts state
+    state = state == NSOnState ? NSOffState : NSOnState
+    puts state
+    puts '--'
+    controlView.target.send controlView.action, controlView, state == NSOnState
     true
   end
   
   def stopTracking(lastPoint, at:stopPoint, inView:controlView, mouseIsUp:mouseIsUp)
-    controlView.target.send controlView.action, controlView, false unless mouseDownFlags == 262401 # ( ctrl key )
+    unless mouseDownFlags == TOGGLE_FLAGS
+      puts "stop"
+      puts state
+      state = NSOffState
+      puts state
+      puts '--'
+      controlView.target.send controlView.action, controlView, false
+    end
   end
   
 end

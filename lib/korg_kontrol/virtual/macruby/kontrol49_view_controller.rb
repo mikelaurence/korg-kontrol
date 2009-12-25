@@ -32,9 +32,9 @@ class Kontrol49ViewController < NSViewController
     view.addSubview @buttonMatrix
     
     @matrices = {
-      @switchMatrix => { :eventClass => SwitchEvent },
+      @switchMatrix => { :eventClass => SwitchEvent, :types => [:sw1, :sw2] },
       @padMatrix => { :eventClass => PadEvent },
-      @buttonMatrix => { :eventClass => SwitchEvent }
+      @buttonMatrix => { :eventClass => SwitchEvent, :types => [:setting, :message, :scene, :exit, :hex_lock, :enter, :previous, :next] }
     }
     
     @leds = {
@@ -53,9 +53,7 @@ class Kontrol49ViewController < NSViewController
       hash[pad] = [@padMatrix, idx / 4, idx % 4]
       hash
     end)
-    
-    @switches = [:sw1, :sw2]
-    @buttons = [:setting, :message, :scene, :exit, :hex_lock, :enter, :previous, :next]
+
     @colors = {
       :red => NSColor.redColor,
       :orange => NSColor.orangeColor,
@@ -114,8 +112,14 @@ class Kontrol49ViewController < NSViewController
   def clickedMatrix(matrix = nil, down = false)
     return if down.is_a?(NSMatrix)
     idx = matrix.selectedRow * matrix.numberOfColumns + matrix.selectedColumn
-    #puts "generating #{@matrices[matrix][:eventClass]}, index: #{idx}, down: #{down}"
-    @controller.capture_event @matrices[matrix][:eventClass].new :index => idx, :state => (down ? :on : :off), :velocity => 127 if @controller and idx >= 0
+    if @controller and idx >= 0
+      eventClass = @matrices[matrix][:eventClass]
+      types = @matrices[matrix][:types]
+      event = eventClass.new types ?
+        { :type => types[idx], :state => down } :
+        { :index => idx, :state => down, :velocity => 127 }
+      @controller.capture_event event
+    end
   end
   
 end
